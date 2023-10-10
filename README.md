@@ -25,11 +25,11 @@ Follow these steps to get the Bank JSON API up and running on your local develop
   git clone https://github.com/Clinton-Nmereole/GoBankAPI.git
   ```
 2. Install go dependencies
-   ```bash
-    go install
-   ```
+  ```bash
+  go install
+  ```
 3. Set up the PostgreSQL database
 4. Start the server:
-   ```bash
-    make run
-   ```
+  ```bash
+  make run
+  ```
