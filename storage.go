@@ -39,17 +39,18 @@ func (s *PostgresStorage) Init() error {
 }
 
 func (s *PostgresStorage) CreateAccountTable() error {
-	query := "CREATE TABLE IF NOT EXISTS accounts (id SERIAL PRIMARY KEY, first_name VARCHAR(255), last_name VARCHAR(255), number BIGINT, balance BIGINT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+	query := "CREATE TABLE IF NOT EXISTS accounts (id SERIAL PRIMARY KEY, first_name VARCHAR(255), last_name VARCHAR(255), number BIGINT, encrypted_password CHAR(255), balance BIGINT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
 	_, err := s.db.Exec(query)
 	return err
 }
 
 func (s *PostgresStorage) CreateAccount(account *Account) error {
-	_, err := s.db.Exec(
-		"INSERT INTO accounts (first_name, last_name, number, balance, created_at) VALUES ($1, $2, $3, $4, $5)",
+	_, err := s.db.Query(
+		"INSERT INTO accounts (first_name, last_name, number, encrypted_password, balance, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
 		account.FirstName,
 		account.LastName,
 		account.Number,
+		account.EncryptedPassword,
 		account.Balance,
 		account.CreatedAt,
 	)
@@ -103,7 +104,7 @@ func (s *PostgresStorage) GetAllAccounts() ([]*Account, error) {
 	var accounts []*Account
 	for rows.Next() {
 		var account Account
-		if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.Balance, &account.CreatedAt); err != nil {
+		if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.EncryptedPassword, &account.Balance, &account.CreatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, &account)
@@ -113,7 +114,7 @@ func (s *PostgresStorage) GetAllAccounts() ([]*Account, error) {
 
 func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 	account := new(Account)
-	if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.Balance, &account.CreatedAt); err != nil {
+	if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.EncryptedPassword, &account.Balance, &account.CreatedAt); err != nil {
 		return nil, err
 	}
 	return account, nil

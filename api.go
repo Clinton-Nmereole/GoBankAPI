@@ -44,14 +44,34 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != "POST" {
 		return fmt.Errorf("Unsupported method: %s", r.Method)
 	}
-	loginRequest := new(LoginRequest)
-	if err := json.NewDecoder(r.Body).Decode(loginRequest); err != nil {
+	var loginRequest LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {
 		return err
 	}
 
 	// Validate login request
+	account, err := a.store.GetAccountByNumber(loginRequest.AccountNumber)
+	if err != nil {
+		return err
+	}
 
-	return WriteJSON(w, http.StatusOK, loginRequest)
+	if account.PasswordMatches(loginRequest.Password) != nil {
+		return fmt.Errorf("Not Authenticated")
+	}
+
+	token, err := createJWT(account)
+	if err != nil {
+		return err
+	}
+
+	response := LoginResponse{
+		Token:  token,
+		Number: account.Number,
+	}
+
+	fmt.Printf("account: %+v\n", account)
+
+	return WriteJSON(w, http.StatusOK, response)
 }
 
 func (a *APIServer) handleAccounts(w http.ResponseWriter, r *http.Request) error {
