@@ -36,6 +36,7 @@ func (a *APIServer) Start() {
 		))
 	router.HandleFunc("/accounts", makeHTTPHandleFunc(a.handleCreateAccount))
 	router.HandleFunc("/transactions", makeHTTPHandleFunc(a.handleTransactions))
+	// router.HandleFunc("/me", makeHTTPHandleFunc(a.handleMe))
 	log.Println("JSON API server started. Listening on port", a.listenAddress)
 	http.ListenAndServe(a.listenAddress, router)
 }
@@ -44,14 +45,16 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != "POST" {
 		return fmt.Errorf("Unsupported method: %s", r.Method)
 	}
-	var loginRequest LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {
+	loginRequest := new(LoginRequest) // LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(loginRequest); err != nil {
 		return err
 	}
 
 	// Validate login request
+	fmt.Println(loginRequest.AccountNumber)
 	account, err := a.store.GetAccountByNumber(loginRequest.AccountNumber)
 	if err != nil {
+		fmt.Println("Account not found")
 		return err
 	}
 
@@ -70,6 +73,13 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	fmt.Printf("account: %+v\n", account)
+	fmt.Println("your account id is:", account.ID)
+
+	// http.Redirect(w, r, "/accounts/"+strconv.Itoa(account.ID), http.StatusOK)
+	w.Header().Add("x-jwt-token", token)
+	w.Header().Add("user-id", strconv.Itoa(account.ID))
+
+	fmt.Println("your header is:", r.Header)
 
 	return WriteJSON(w, http.StatusOK, response)
 }
@@ -120,8 +130,9 @@ func (a *APIServer) handleGetAccounts(w http.ResponseWriter, r *http.Request) er
 
 func (a *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
 	createAccountRequest := new(CreateAccountRequest)
+	fmt.Println(json.NewDecoder(r.Body))
 	if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
-		return err
+		return fmt.Errorf("Failed to decode request body: %w", err)
 	}
 
 	account, err := NewAccount(
@@ -130,15 +141,18 @@ func (a *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		createAccountRequest.Password,
 	)
 	if err := a.store.CreateAccount(account); err != nil {
-		return err
+		return fmt.Errorf("Failed to create account: %w", err)
 	}
 
 	tokenString, err := createJWT(account)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to create JWT token: %w", err)
 	}
 	fmt.Println("JWT token: ", tokenString)
 
+	// return WriteJSON(w, http.StatusOK, account)
+	http.Redirect(w, r, "http://localhost:5173/", http.StatusOK)
+	r.Header.Add("x-jwt-token", tokenString)
 	return WriteJSON(w, http.StatusOK, account)
 }
 
@@ -157,6 +171,15 @@ func (a *APIServer) handleDeleteAccountByID(w http.ResponseWriter, r *http.Reque
 func (a *APIServer) handleTransactions(w http.ResponseWriter, r *http.Request) error {
 	transactionRequest := new(Transaction)
 	if err := json.NewDecoder(r.Body).Decode(transactionRequest); err != nil {
+		return err
+	}
+	toAccount, err := a.store.GetAccountByID(transactionRequest.ToAccount)
+	if err != nil {
+		return err
+	}
+	fmt.Print(toAccount)
+	// fromAccount, err := a.store.GetAccountByID(r.)
+	if err != nil {
 		return err
 	}
 	defer r.Body.Close()
