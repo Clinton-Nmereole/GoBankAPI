@@ -14,6 +14,7 @@ type Storage interface {
 	DeleteAccount(id int) error
 	GetAllAccounts() ([]*Account, error)
 	UpdateAccount(account *Account) error
+	Transfer(amount int64, toAccountNumber int32, fromAccountNumber int32) error
 }
 
 type PostgresStorage struct {
@@ -21,7 +22,7 @@ type PostgresStorage struct {
 }
 
 func NewPostgresStorage() (*PostgresStorage, error) {
-	connectString := "user=postgres password=Abrightdayin1990 dbname=postgres sslmode=disable"
+	connectString := "host=gobankdb user=postgres password=Abrightdayin1990 dbname=postgres sslmode=disable"
 	db, err := sql.Open("postgres", connectString)
 	if err != nil {
 		return nil, err
@@ -92,7 +93,40 @@ func (s *PostgresStorage) DeleteAccount(id int) error {
 	return nil
 }
 
-func (s *PostgresStorage) UpdateAccount(account *Account) error {
+func (s *PostgresStorage) UpdateAccount(account *Account, id int) error {
+	_, err := s.db.Exec(
+		"UPDATE accounts SET first_name = $1, last_name = $2, WHERE id = $3",
+		account.FirstName,
+		account.LastName,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *PostgresStorage) Transfer(
+	amount int64,
+	toAccountNumber int32,
+	fromAccountNumber int32,
+) error {
+	_, err := s.db.Exec(
+		"UPDATE accounts SET balance = balance + $1 WHERE number = $2",
+		amount,
+		toAccountNumber,
+	)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		"UPDATE accounts SET balance = balance - $1 WHERE number = $2",
+		amount,
+		fromAccountNumber,
+	)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

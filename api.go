@@ -38,8 +38,18 @@ func (a *APIServer) Start() {
 	router.HandleFunc("/transactions", makeHTTPHandleFunc(a.handleTransactions))
 	// router.HandleFunc("/me", makeHTTPHandleFunc(a.handleMe))
 	log.Println("JSON API server started. Listening on port", a.listenAddress)
-	http.ListenAndServe(a.listenAddress, router)
+	err := http.ListenAndServe(a.listenAddress, router)
+	fmt.Printf("%+v\n", err)
 }
+
+var (
+	loginid     string
+	loggedin    bool
+	logintoken  string
+	loginnumber int32
+)
+
+var loginResponse LoginResponse
 
 func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != "POST" {
@@ -51,7 +61,7 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Validate login request
-	fmt.Println(loginRequest.AccountNumber)
+	// fmt.Println(loginRequest.AccountNumber)
 	account, err := a.store.GetAccountByNumber(loginRequest.AccountNumber)
 	if err != nil {
 		fmt.Println("Account not found")
@@ -72,16 +82,31 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		Number: account.Number,
 	}
 
-	fmt.Printf("account: %+v\n", account)
-	fmt.Println("your account id is:", account.ID)
+	loginResponse = response
+
+	// fmt.Printf("account: %+v\n", account)
+	// fmt.Println("your account id is:", account.ID)
 
 	// http.Redirect(w, r, "/accounts/"+strconv.Itoa(account.ID), http.StatusOK)
 	w.Header().Add("x-jwt-token", token)
 	w.Header().Add("user-id", strconv.Itoa(account.ID))
+	// fmt.Println("getting user-id token: ", w.Header().Get("user-id"))
+	loginid = strconv.Itoa(account.ID)
+	loginnumber = response.Number
+	loggedin = true
+	logintoken = loginResponse.Token
 
-	fmt.Println("your header is:", r.Header)
+	// fmt.Println("your header is:", r.Header)
 
 	return WriteJSON(w, http.StatusOK, response)
+}
+
+func handleLogout(w http.ResponseWriter) {
+	w.Header().Add("x-jwt-token", "")
+	w.Header().Add("user-id", "")
+	loginid = ""
+	loggedin = false
+	logintoken = ""
 }
 
 func (a *APIServer) handleAccounts(w http.ResponseWriter, r *http.Request) error {
@@ -105,7 +130,15 @@ func (a *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return fmt.Errorf("Invalid ID: %s", idStr)
 		}
+		if !loggedin {
+			return fmt.Errorf("Not logged in")
+		} else {
+			fmt.Println("you are logged in")
+		}
 		// account := NewAccount("Clinton", "Sensei")
+		// fmt.Println("you are logged in")
+		// w.Header().Add("x-jwt-token", loginResponse.Token)
+		// fmt.Println("this is your x-jwt-token: ", r.Header.Get("x-jwt-token"))
 
 		// database will go here (something like db get id)
 		account, err := a.store.GetAccountByID(id)
@@ -129,31 +162,34 @@ func (a *APIServer) handleGetAccounts(w http.ResponseWriter, r *http.Request) er
 }
 
 func (a *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	createAccountRequest := new(CreateAccountRequest)
-	fmt.Println(json.NewDecoder(r.Body))
-	if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
-		return fmt.Errorf("Failed to decode request body: %w", err)
-	}
+	if r.Method == "PUT" {
+		createAccountRequest := new(CreateAccountRequest)
+		fmt.Println(json.NewDecoder(r.Body))
+		if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
+			return fmt.Errorf("Failed to decode request body: %w", err)
+		}
 
-	account, err := NewAccount(
-		createAccountRequest.FirstName,
-		createAccountRequest.LastName,
-		createAccountRequest.Password,
-	)
-	if err := a.store.CreateAccount(account); err != nil {
-		return fmt.Errorf("Failed to create account: %w", err)
-	}
+		account, err := NewAccount(
+			createAccountRequest.FirstName,
+			createAccountRequest.LastName,
+			createAccountRequest.Password,
+		)
+		if err := a.store.CreateAccount(account); err != nil {
+			return fmt.Errorf("Failed to create account: %w", err)
+		}
 
-	tokenString, err := createJWT(account)
-	if err != nil {
-		return fmt.Errorf("Failed to create JWT token: %w", err)
-	}
-	fmt.Println("JWT token: ", tokenString)
+		tokenString, err := createJWT(account)
+		if err != nil {
+			return fmt.Errorf("Failed to create JWT token: %w", err)
+		}
+		fmt.Println("JWT token: ", tokenString)
 
-	// return WriteJSON(w, http.StatusOK, account)
-	http.Redirect(w, r, "http://localhost:5173/", http.StatusOK)
-	r.Header.Add("x-jwt-token", tokenString)
-	return WriteJSON(w, http.StatusOK, account)
+		// return WriteJSON(w, http.StatusOK, account)
+		http.Redirect(w, r, "http://localhost:5173/", http.StatusOK)
+		r.Header.Add("x-jwt-token", tokenString)
+		return WriteJSON(w, http.StatusOK, account)
+	}
+	return fmt.Errorf("Unsupported method: %s", r.Method)
 }
 
 func (a *APIServer) handleDeleteAccountByID(w http.ResponseWriter, r *http.Request) error {
@@ -169,21 +205,35 @@ func (a *APIServer) handleDeleteAccountByID(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *APIServer) handleTransactions(w http.ResponseWriter, r *http.Request) error {
-	transactionRequest := new(Transaction)
-	if err := json.NewDecoder(r.Body).Decode(transactionRequest); err != nil {
-		return err
+	if r.Method == "POST" {
+		transactionRequest := new(Transaction)
+		if err := json.NewDecoder(r.Body).Decode(transactionRequest); err != nil {
+			return fmt.Errorf("Failed to decode request body: %w", err)
+		}
+		// Perform the handleTransactions
+		if err := a.store.Transfer(transactionRequest.Amount, transactionRequest.ToAccount, loginnumber); err != nil {
+			return err
+		}
+		// Create a token for the handleTransactions
+		// To do this we first have to get the fromAccount so we can get it by account number
+		account, err := a.store.GetAccountByNumber(loginnumber)
+		if err != nil {
+			return err
+		}
+		token, err := createJWT(account)
+		if err != nil {
+			return err
+		}
+		response := TransactionResponse{
+			Transaction: *transactionRequest,
+			Balance:     account.Balance,
+			Token:       token,
+		}
+		// fromAccount, err := a.store.GetAccountByID(r.)
+		defer r.Body.Close()
+		return WriteJSON(w, http.StatusOK, response)
 	}
-	toAccount, err := a.store.GetAccountByID(transactionRequest.ToAccount)
-	if err != nil {
-		return err
-	}
-	fmt.Print(toAccount)
-	// fromAccount, err := a.store.GetAccountByID(r.)
-	if err != nil {
-		return err
-	}
-	defer r.Body.Close()
-	return WriteJSON(w, http.StatusOK, transactionRequest)
+	return fmt.Errorf("Unsupported method: %s", r.Method)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -208,9 +258,16 @@ func permissionDenied(w http.ResponseWriter) {
 // Middleware
 func withJWTAuth(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("withJWTAuth")
-		tokenString := r.Header.Get("x-jwt-token")
+		fmt.Println("calling withJWTAuth")
+		tokenString := logintoken
+		// fmt.Println("logintoken: ", loginResponse.Token)
+		// fmt.Println("getting user-id token from JWT Auth: ", w.Header().Get("user-id"))
+		// fmt.Println("your x-jwt-token: ", tokenString)
 		token, err := validateJWT(tokenString)
+		if err != nil {
+			permissionDenied(w)
+			return
+		}
 		claims := token.Claims.(jwt.MapClaims)
 		fmt.Println(claims)
 		if err != nil {

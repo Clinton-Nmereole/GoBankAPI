@@ -24,9 +24,15 @@ type CreateAccountRequest struct {
 }
 
 type Transaction struct {
-	ToAccount int       `json:"to_account"`
+	ToAccount int32     `json:"to_account"`
 	Amount    int64     `json:"amount"`
 	Time      time.Time `json:"transaction_init_time"`
+}
+
+type TransactionResponse struct {
+	Transaction Transaction
+	Balance     int64
+	Token       string
 }
 
 type Account struct {
