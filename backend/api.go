@@ -165,7 +165,7 @@ func (a *APIServer) handleGetAccounts(w http.ResponseWriter, r *http.Request) er
 }
 
 func (a *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	if r.Method == "PUT" {
+	if r.Method == "POST" {
 		createAccountRequest := new(CreateAccountRequest)
 		fmt.Println(json.NewDecoder(r.Body))
 		if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
