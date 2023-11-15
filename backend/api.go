@@ -57,6 +57,9 @@ func (a *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != "POST" {
 		return fmt.Errorf("Unsupported method: %s", r.Method)
 	}
+	if loggedin {
+		return WriteJSON(w, http.StatusOK, loginResponse)
+	}
 	loginRequest := new(LoginRequest) // LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(loginRequest); err != nil {
 		return err

@@ -2,6 +2,14 @@ import { redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 import type { Actions } from "./$types";
 
+export const load: PageLoad = async (event: any) => {
+    const login = event.cookies.get('jwt-x-token')
+    if (login) {
+        throw redirect(303, '/me')
+    }
+    //throw redirect(303, '/login')
+};
+
 
 
 
@@ -13,7 +21,7 @@ export const actions: Actions = {
         //const account_number = Number(account_str)
 
 
-    
+
         const response = await fetch('http://0.0.0.0:8080/login', {
             method: 'POST',
             headers: {
@@ -26,12 +34,12 @@ export const actions: Actions = {
         })
 
         console.log(account_number)
-    
+
         if (response.ok) {
             //const x_jwt_token = response.headers.get('x-jwt-token') as string
             const user = response.headers.get('user-id') as string
             //event.cookies.set('x-jwt-token', x_jwt_token, {
-             //   path: '/',           
+            //   path: '/',           
             //})
             event.cookies.set('user-id', user, {
                 path: '/',
@@ -46,6 +54,6 @@ export const actions: Actions = {
                 status: 400
             }
         }
-    
+
     }
 };
